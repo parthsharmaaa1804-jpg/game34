@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Pro Racing Game</title>
+<style>
+body{margin:0;background:#111;color:white;text-align:center;font-family:Arial;}
+canvas{background:#444;display:block;margin:auto;border:3px solid white;}
+button{padding:12px 25px;font-size:18px;margin:5px;cursor:pointer;}
+#score,#coins,#highscore{font-size:20px;margin:5px;}
+#ad{background:#222;padding:10px;margin:10px;}
+</style>
+</head>
+<body>
+
+<h1>🏎️ Pro Racing Game</h1>
+
+<div id="menu">
+<button onclick="startGame()">Start Game</button>
+<button onclick="showLeaderboard()">Leaderboard</button>
+<button onclick="showShop()">Shop</button>
+</div>
+
+<div id="gameArea" style="display:none">
+<div id="score">Score: 0</div>
+<div id="coins">Coins: 0</div>
+<div id="highscore">High Score: 0</div>
+
+<!-- Ad placeholder -->
+<div id="ad">Ad Space (Add AdSense later)</div>
+
+<canvas id="game" width="400" height="600"></canvas>
+
+<div>
+<button onclick="moveLeft()">⬅</button>
+<button onclick="moveRight()">➡</button>
+<button onclick="pauseGame()">⏸ Pause</button>
+</div>
+</div>
+
+<div id="leaderboardArea" style="display:none">
+<h2>🏆 Leaderboard</h2>
+<ul id="leaderboardList"></ul>
+<button onclick="backToMenu()">Back</button>
+</div>
+
+<div id="shopArea" style="display:none">
+<h2>🚗 Shop</h2>
+<button onclick="buyCar('G-Wagon',150)">Buy G-Wagon ₹150</button>
+<button onclick="buyCar('Lamborghini',200)">Buy Lamborghini ₹200</button>
+<button onclick="buyBoost(100)">Buy Speed Boost ₹100</button>
+<button onclick="backToMenu()">Back</button>
+</div>
+
+<audio id="engine" src="https://www.soundjay.com/transportation/car-engine-1.mp3" loop></audio>
+<audio id="crash" src="https://www.soundjay.com/mechanical/car-crash-1.mp3"></audio>
+
+<script>
+// === GAME VARIABLES ===
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const engine = document.getElementById("engine");
+const crash = document.getElementById("crash");
+
+let gameRunning=false;
+let score=0;
+let coins=0;
+let speed=4;
+let roadY=0;
+let highScore = localStorage.getItem("highScore") || 0;
+document.getElementById("highscore").innerText="High Score: "+highScore;
+
+const playerCar = new Image();
+playerCar.src = "https://i.imgur.com/8YFJvHI.png"; // default car
+
+const enemyCars = [
+"https://i.imgur.com/7i1J3zM.png", // traffic car 1
+"https://i.imgur.com/8YFJvHI.png", // traffic car 2
+"https://i.imgur.com/Ii4Fl2d.png" // Ferrari
+];
+
+const coinImg = new Image();
+coinImg.src = "https://i.imgur.com/QZ6G7sK.png";
+
+const player = {x:180,y:500,width:50,height:100};
+const enemies=[];
+const coinsArray=[];
+
+// === SPAWN FUNCTIONS ===
+function spawnEnemy(){
+  const lane = Math.floor(Math.random()*3);
+  const img = new Image();
+  img.src = enemyCars[Math.floor(Math.random()*enemyCars.length)];
+  enemies.push({x: lane*120+60, y:-120, width:50, height:100, speed:speed, img:img});
+}
+
+function spawnCoin(){
+  const lane = Math.floor(Math.random()*3);
+  coinsArray.push({x: lane*120+70, y:-50, size:30, speed:speed});
+}
+
+// === DRAW FUNCTIONS ===
+function drawRoad(){
+  ctx.fillStyle="#333";
+  ctx.fillRect(0,0,400,600);
+  ctx.strokeStyle="white";
+  ctx.lineWidth=5;
+  for(let i=0;i<10;i++){
+    ctx.beginPath();
+    ctx.moveTo(130,roadY+i*80);
+    ctx.lineTo(130,roadY+i*80+40);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(270,roadY+i*80);
+    ctx.lineTo(270,roadY+i*80+40);
+    ctx.stroke();
+  }
+  roadY+=speed;
+  if(roadY>80) roadY=0;
+}
+
+function drawPlayer(){ctx.drawImage(playerCar,player.x,player.y,player.width,player.height);}
+function drawEnemies(){enemies.forEach(e=>{ctx.drawImage(e.img,e.x,e.y,e.width,e.height);});}
+function drawCoins(){coinsArray.forEach(c=>{ctx.drawImage(coinImg,c.x,c.y,c.size,c.size);});}
+
+// === UPDATE FUNCTIONS ===
+function updateEnemies(){
+  enemies.forEach((e,i)=>{
+    e.y+=e.speed;
+    if(e.y+e.height>player.y && e.x<player.x+player.width && e.x+e.width>player.x && e.y<player.y+player.height){
+      crash.play();
+      engine.pause();
+      if(score>highScore){localStorage.setItem("highScore",score);}
+      saveScore(score);
+      alert("💥 Crash! Score: "+score);
+      location.reload();
+    }
+    if(e.y>600){enemies.splice(i,1); score+=10; document.getElementById("score").innerText="Score: "+score; if(score%50===0)speed+=1;}
+  });
+}
+
+function updateCoins(){
+  coinsArray.forEach((c,i)=>{
+    c.y+=c.speed;
+    if(c.y+30>player.y && c.x<player.x+player.width && c.x+30>player.x && c.y<player.y+player.height){
+      coinsArray.splice(i,1); coins+=1; document.getElementById("coins").innerText="Coins: "+coins;
+    }
+    if(c.y>600){coinsArray.splice(i,1);}
+  });
+}
+
+// === GAME LOOP ===
+function gameLoop(){
+  if(gameRunning){
+    drawRoad(); drawPlayer(); drawEnemies(); drawCoins(); updateEnemies(); updateCoins();
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+// === CONTROL FUNCTIONS ===
+document.addEventListener("keydown",e=>{
+  engine.play();
+  if(e.key==="ArrowLeft" && player.x>0) player.x-=40;
+  if(e.key==="ArrowRight" && player.x<350) player.x+=40;
+});
+
+function moveLeft(){if(player.x>0) player.x-=40;}
+function moveRight(){if(player.x<350) player.x+=40;}
+function pauseGame(){gameRunning=!gameRunning;}
+
+// === SHOP FUNCTIONS ===
+function buyCar(name,price){
+  if(coins>=price){coins-=price; playerCar.src=`https://i.imgur.com/${name}.png`; alert(name+" purchased!"); document.getElementById("coins").innerText="Coins: "+coins;}
+  else{alert("Not enough coins!");}
+}
+
+function buyBoost(price){
+  if(coins>=price){coins-=price; speed+=2; alert("Speed Boost!"); document.getElementById("coins").innerText="Coins: "+coins;}
+  else{alert("Not enough coins!");}
+}
+
+// === LEADERBOARD FUNCTIONS ===
+function saveScore(score){
+  let scores=JSON.parse(localStorage.getItem("scores") || "[]");
+  scores.push(score); localStorage.setItem("scores",JSON.stringify(scores));
+}
+
+function showLeaderboard(){
+  document.getElementById("menu").style.display="none";
+  document.getElementById("leaderboardArea").style.display="block";
+  let scores=JSON.parse(localStorage.getItem("scores") || "[]"); scores.sort((a,b)=>b-a);
+  const list=document.getElementById("leaderboardList"); list.innerHTML="";
+  scores.forEach((s,i)=>{const li=document.createElement("li"); li.innerText=`${i+1}. ${s} pts`; list.appendChild(li);});
+}
+
+function showShop(){document.getElementById("menu").style.display="none"; document.getElementById("shopArea").style.display="block";}
+function backToMenu(){document.getElementById("menu").style.display="block"; document.getElementById("leaderboardArea").style.display="none"; document.getElementById("shopArea").style.display="none";}
+
+// === START GAME ===
+function startGame(){document.getElementById("menu").style.display="none"; document.getElementById("gameArea").style.display="block"; gameRunning=true; engine.play();}
+
+// === SPAWN INTERVALS ===
+setInterval(spawnEnemy,1200); setInterval(spawnCoin,2000);
+gameLoop();
+</script>
+
+</body>
+</html>
